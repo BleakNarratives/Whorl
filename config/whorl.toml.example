@@ -1,0 +1,30 @@
+# ~/.whorl/config.toml
+# Copy this to ~/.whorl/config.toml and edit.
+# WHORL creates this automatically on first run.
+
+[whorl]
+version   = "0.1.0"
+log_level = "INFO"
+
+[ollama]
+url            = "http://localhost:11434/api/generate"
+model_audrey   = "zane-preacher:latest"
+model_claib    = "llama3.2:1b"
+model_vertical = "deepseek-coder:latest"
+model_forge    = "llama3.2:1b"
+model_tailor   = "deepseek-coder:latest"
+
+[nostr]
+relay     = "wss://relay.damus.io"
+keys_path = "~/.whorl/nostr_keys.json"
+
+[scouts]
+# Add RSS/JSON feed URLs here
+feeds    = []
+interval = 3600   # seconds between sweeps
+
+[forge]
+output_dir = "~/.whorl/pitches"
+
+[agents]
+registry = "~/.whorl/agents.json"

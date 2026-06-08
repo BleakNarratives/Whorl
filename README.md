@@ -1,0 +1,117 @@
+# WHORL
+
+**Field Intelligence & Agent Deployment Workbench**
+
+A modular, portable Python ecosystem that runs entirely on Termux.
+No cloud. No Docker. SQLite + Ollama + Nostr.
+
+---
+
+## Modules
+
+| Module    | What it does |
+|-----------|-------------|
+| `scouts`  | Ingests intel feeds. Produces Signal objects. Writes to DB. |
+| `forge`   | Pitch engine. Target + vertical → structured sales document. |
+| `hotseat` | Three-voice idea stress-test (Audrey, Claib, Vertical AI). |
+| `loom`    | CodeCity-Bench — topological code analysis. |
+| `agents`  | Deployed agents. Yvette is first. |
+| `tailor`  | QRD Engine — tiered summaries. MindaIntent parser. |
+| `nostr`   | Distributed agent intercom via Nostr relays. |
+| `core`    | Shared models, config, SQLite layer. |
+
+---
+
+## Install (Termux)
+
+```bash
+git clone https://github.com/bleaknarratives/whorl
+cd whorl
+bash scripts/install.sh
+```
+
+Requires Ollama running: `ollama serve &`
+
+---
+
+## Usage
+
+```bash
+whorl status
+
+whorl scout run
+whorl scout list
+
+whorl forge pitch --target "RCB Bank" --vertical bank
+whorl forge list
+
+whorl seat "my idea here"
+whorl seat history
+
+whorl loom scan ./codebase
+
+whorl agent yvette --vertical hvac
+
+whorl tailor qrd "wall of text to summarize"
+whorl tailor intent "raw thought dump"
+
+whorl db migrate
+```
+
+---
+
+## Architecture
+
+```
+whorl/
+├── whorl/
+│   ├── cli.py          ← `whorl` command entry point
+│   ├── core/
+│   │   ├── config.py   ← reads ~/.whorl/config.toml
+│   │   ├── db.py       ← SQLite shared layer
+│   │   └── models.py   ← shared dataclasses (Signal, Pitch, Bearing...)
+│   ├── scouts/         ← intel ingestion
+│   ├── forge/          ← pitch engine
+│   ├── hotseat/        ← three-voice debate
+│   ├── loom/           ← code topology (CodeCity-Bench)
+│   ├── agents/
+│   │   └── yvette/     ← intake/dispatch agent
+│   ├── tailor/         ← QRD + MindaIntent
+│   └── nostr/          ← relay intercom
+├── config/
+│   └── whorl.toml.example
+├── scripts/
+│   └── install.sh
+└── pyproject.toml
+```
+
+### The Bearing System
+
+Agents carry a capability vector instead of boolean permissions:
+
+```
+x   — lateral scope   (0=local → 3=global)
+y   — depth           (0=surface → 3=strategy)
+z   — execution power (0=read-only → 3=deploy)
+cw  — can escalate    (hand off to higher agent)
+ccw — can delegate    (spawn sub-agents)
+```
+
+### Nostr as Nervous System
+
+Scouts publish intel to a relay.
+Hotseat subscribes and reacts.
+Forge listens for validated signals.
+The deployer watches for commands.
+No central server. Swarm reroutes on relay failure.
+
+---
+
+## Data
+
+Everything persists to `~/.whorl/whorl.db` (SQLite).
+Tables: `signals`, `pitches`, `hotseat_sessions`, `qrds`, `agents`, `nostr_events`.
+
+---
+
+*Built by BleakNarratives. Runs on a phone. Does real work.*
