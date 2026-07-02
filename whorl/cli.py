@@ -181,6 +181,12 @@ def cmd_db_migrate(args):
     print("[db] Migrations applied.")
 
 
+
+def cmd_bridge(args):
+    """Start the Whorl -> Boardroom HTTP bridge."""
+    from whorl.bridge import serve
+    serve(host=args.host, port=args.port)
+
 # ── Argument parser ────────────────────────────────────────────────────────
 
 def build_parser() -> argparse.ArgumentParser:
@@ -244,6 +250,12 @@ def build_parser() -> argparse.ArgumentParser:
     db_sub = dbc.add_subparsers(dest="db_cmd")
     db_sub.add_parser("migrate", help="Run pending DB migrations")
 
+
+    # bridge
+    bridge = sub.add_parser("bridge", help="Start the Vertical AI Boardroom HTTP bridge")
+    bridge.add_argument("--host", default="127.0.0.1", help="Bind address (default: 127.0.0.1)")
+    bridge.add_argument("--port", type=int, default=8767, help="Port (default: 8767)")
+
     return p
 
 
@@ -270,6 +282,7 @@ def main(argv: List[str] = None):
         ("tailor",  "qrd"):       cmd_tailor_qrd,
         ("tailor",  "intent"):    cmd_tailor_intent,
         ("db",      "migrate"):   cmd_db_migrate,
+        ("bridge",  None):        cmd_bridge,
     }
 
     sub_attr = {

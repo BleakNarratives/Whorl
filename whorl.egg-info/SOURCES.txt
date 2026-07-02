@@ -20,4 +20,4 @@ whorl/hotseat/__init__.py
 whorl/loom/__init__.py
 whorl/nostr/__init__.py
 whorl/scouts/__init__.py
-whorl/tailor/__init__.py
+whorl/tailor/__init__.pywhorl/bridge/__init__.py

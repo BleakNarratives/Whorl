@@ -20,10 +20,12 @@ loom    = []                          # stdlib only (ast, os)
 agents  = []
 tailor  = []
 nostr   = ["websockets"]
-all     = ["whorl[scouts,nostr]"]
+bridge  = []                          # stdlib only
+all     = ["whorl[scouts,nostr,bridge]"]
 
 [project.scripts]
 whorl = "whorl.cli:main"
+whorl-bridge = "whorl.bridge:main"
 
 [tool.setuptools.packages.find]
 where   = ["."]
