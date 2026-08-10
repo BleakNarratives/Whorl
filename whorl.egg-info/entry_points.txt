@@ -1,0 +1,3 @@
+[console_scripts]
+whorl = whorl.cli:main
+whorl-bridge = whorl.bridge:main

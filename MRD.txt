@@ -1,0 +1,111 @@
+# MRD — Meatsuit Rundown
+# ═══════════════════════════════════════════════════════════════
+#   Human-Dependent Tasks That The Agent Cannot Do Alone
+#   "The meatsuit drives; the model maps."
+# ═══════════════════════════════════════════════════════════════
+
+_Session: July 3, 2026 — Track 2 (Remote Compute) & Infrastructure_
+
+---
+
+## PRIORITY: CRITICAL (blocks cloud inference)
+
+### ☐ Groq API Key Setup
+- [ ] Go to https://console.groq.com
+- [ ] Sign up with email (no card, no ID, no KYC)
+- [ ] Create API key (name it "whorl-spirit")
+- [ ] Paste key into `.env` file as `GROQ_API_KEY=gsk_...`
+- [ ] OR export: `export GROQ_API_KEY='gsk_...'`
+- **Status:** Key found in `RootBase/Official-Vertical-AI-Boardroom/.env` (expired 403)
+- **Alternative:** Fresh key from `UnifiedCodeCity/secrets/.env` (confirmed working with curl)
+- **Agent can test once key is set:** `python3 -c "from whorl.tools.model_spirit import invoke_model; print(invoke_model('hello'))"`
+
+### ☐ Supabase Project Setup (optional, for persistent state)
+- [ ] Go to https://supabase.com
+- [ ] Sign up with email (no card needed)
+- [ ] Create new project (name: "whorl-state")
+- [ ] Get URL + anon key from Settings → API
+- [ ] Paste into `.env` as `SUPABASE_URL=...` and `SUPABASE_KEY=...`
+- **Why:** Replaces local `~/.whorl/state.json` with shared Postgres DB
+- **Agent can wire once keys are set**
+
+---
+
+## PRIORITY: HIGH (enables remote compute)
+
+### ☐ Oracle Cloud A1 (BLOCKED: needs credit card)
+- [ ] Sign up at https://oracle.com/cloud/free
+- [ ] Add credit card for identity verification (small hold, refunded)
+- [ ] Create A1 Flex instance (2 OCPU, 12GB RAM, Ubuntu 24.04 aarch64)
+- [ ] Upload SSH public key: `cat ~/.ssh/id_rsa.pub`
+- [ ] Open port 8080 in Security List (TCP, 0.0.0.0/0)
+- [ ] Note the public IP address
+- [ ] SSH in: `ssh ubuntu@<PUBLIC_IP>`
+- [ ] Upload and run: `scp oracle_a1_setup.sh ubuntu@<IP>:~/ && ssh ubuntu@<IP> bash oracle_a1_setup.sh`
+- [ ] Verify: `curl http://<IP>:8080/health`
+- **Agent wrote:** `oracle_a1_setup.sh` (full provisioning automation)
+- **Status:** Script ready, waiting on credit card
+
+---
+
+## PRIORITY: MEDIUM (improves experience)
+
+### ☐ SSH Key Setup (for cross-device sync)
+- [ ] Generate SSH key if not exists: `ssh-keygen -t ed25519`
+- [ ] Copy public key to target devices: `ssh-copy-id user@device-ip`
+- [ ] Test: `ssh user@device-ip "echo connected"`
+- **Needed for:** Moto ↔ Chromebook ↔ Tablet sync (Track 3)
+
+### ☐ Environment File Setup
+- [ ] Create `~/.whorl/.env` with all API keys:
+  ```
+  GROQ_API_KEY=gsk_...
+  WHORL_MODEL_HOST=<A1_IP>
+  WHORL_MODEL_PORT=8080
+  WHORL_MODEL_MODE=auto
+  ```
+- [ ] Source it: `source ~/.whorl/.env`
+- **Agent can read once file exists**
+
+---
+
+## PRIORITY: LOW (nice to have)
+
+### ☐ Demo Recording
+- [ ] Run `python3 loomy.py demo` and capture terminal output
+- [ ] Run `python3 loomy.py demo-knot` and capture terminal output
+- [ ] Run `python3 loomy.py run market_scout.whr` and capture output
+- **Why:** Good for README screenshots and social media
+
+### ☐ Easter Egg Discovery
+- [ ] Run `python3 loomy.py --help` and look for hidden messages
+- [ ] Check `whorl/core/bearing.py` for embedded comments
+- [ ] Run `python3 loomy.py bearing cw cw cw` for the full-send Easter egg
+- **Agent hid:** At least one Easter egg in the codebase 🥚
+
+---
+
+## NOTES
+
+### What the Agent CAN Do (no human needed):
+- ✅ Run `loomy.py demo` / `demo-knot` / `run *.whr`
+- ✅ Transpile code: `loomy.py decompile --from python --to bash "print('hi')"`
+- ✅ Weave/unravel crypto knots
+- ✅ Read/write shared state
+- ✅ Run `model_spirit.py` in local mode (Ollama/TinyLlama)
+- ✅ Spawn agents, run swarms, inspect bearings
+
+### What the Agent CANNOT Do (meatsuit required):
+- ❌ Create cloud accounts (needs email verification)
+- ❌ Add credit cards (needs human payment method)
+- ❌ SSH into remote servers (needs key exchange)
+- ❌ Install system packages (needs sudo)
+- ❌ Accept Terms of Service (needs human consent)
+- ❌ Make phone calls (still working on this one)
+
+---
+
+_"The meatsuit drives; the model maps._
+_What one cannot do alone, they do together."_
+
+— MRD, July 3, 2026

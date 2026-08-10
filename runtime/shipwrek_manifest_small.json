@@ -1,0 +1,54 @@
+{
+  "swarm_name": "ShipWrekD Testnet",
+  "description": "Minimal constellation for rapid testing",
+  "agents": [
+    {
+      "id": "elite-chairman",
+      "outfit": "elite_chairman",
+      "tier": "ARCHITECT",
+      "capabilities": ["orchestration", "strategy"],
+      "speed": 8,
+      "tasks_seed": 50
+    },
+    {
+      "id": "hat-brown",
+      "outfit": "hat_brown",
+      "tier": "OPERATIVE",
+      "capabilities": ["execution", "shipping"],
+      "speed": 10,
+      "tasks_seed": 40
+    },
+    {
+      "id": "hat-black",
+      "outfit": "hat_black",
+      "tier": "SPECIALIST",
+      "capabilities": ["risk_assessment"],
+      "speed": 5,
+      "tasks_seed": 15
+    },
+    {
+      "id": "native-truthsleuth",
+      "outfit": "native_truthsleuth",
+      "tier": "SPECIALIST",
+      "capabilities": ["code_audit"],
+      "speed": 6,
+      "tasks_seed": 20
+    },
+    {
+      "id": "field-scout",
+      "outfit": "field_scout",
+      "tier": "WORKER",
+      "capabilities": ["reconnaissance"],
+      "speed": 8,
+      "tasks_seed": 10
+    },
+    {
+      "id": "sidecar-outclaw",
+      "outfit": "swarm_smuggler",
+      "tier": "SPECIALIST",
+      "capabilities": ["legal_audit"],
+      "speed": 5,
+      "tasks_seed": 15
+    }
+  ]
+}

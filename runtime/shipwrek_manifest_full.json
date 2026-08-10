@@ -1,0 +1,174 @@
+{
+  "swarm_name": "ShipWrekD Mainnet",
+  "description": "Full constellation — all persona groups active",
+  "agents": [
+    {
+      "id": "elite-chairman",
+      "outfit": "elite_chairman",
+      "tier": "ARCHITECT",
+      "capabilities": ["orchestration", "strategy", "deliberation", "final_verdict"],
+      "speed": 8,
+      "tasks_seed": 50
+    },
+    {
+      "id": "elite-devil",
+      "outfit": "elite_devil",
+      "tier": "ARCHITECT",
+      "capabilities": ["skepticism", "pressure_testing", "assumption_destruction"],
+      "speed": 9,
+      "tasks_seed": 30
+    },
+    {
+      "id": "hat-brown",
+      "outfit": "hat_brown",
+      "tier": "OPERATIVE",
+      "capabilities": ["execution", "shipping", "getting_shit_done"],
+      "speed": 10,
+      "tasks_seed": 40
+    },
+    {
+      "id": "hat-blue",
+      "outfit": "hat_blue",
+      "tier": "OPERATIVE",
+      "capabilities": ["process_control", "facilitation", "meta_cognition"],
+      "speed": 6,
+      "tasks_seed": 25
+    },
+    {
+      "id": "hat-white",
+      "outfit": "hat_white",
+      "tier": "SPECIALIST",
+      "capabilities": ["data_analysis", "fact_gathering", "audit_trails"],
+      "speed": 5,
+      "tasks_seed": 20
+    },
+    {
+      "id": "hat-black",
+      "outfit": "hat_black",
+      "tier": "SPECIALIST",
+      "capabilities": ["risk_assessment", "critical_thinking", "caution"],
+      "speed": 5,
+      "tasks_seed": 15
+    },
+    {
+      "id": "field-judge",
+      "outfit": "swarm_judge",
+      "tier": "SPECIALIST",
+      "capabilities": ["quality_gate", "standards_enforcement", "arbitration"],
+      "speed": 4,
+      "tasks_seed": 15
+    },
+    {
+      "id": "native-truthsleuth",
+      "outfit": "native_truthsleuth",
+      "tier": "SPECIALIST",
+      "capabilities": ["code_audit", "truth_verification", "anomaly_detection"],
+      "speed": 6,
+      "tasks_seed": 20
+    },
+    {
+      "id": "native-truthsleuth-2",
+      "outfit": "native_truthsleuth",
+      "tier": "SPECIALIST",
+      "capabilities": ["security", "hardening", "resilience"],
+      "speed": 5,
+      "tasks_seed": 15
+    },
+    {
+      "id": "field-ghost",
+      "outfit": "swarm_ghost",
+      "tier": "WORKER",
+      "capabilities": ["surveillance", "log_analysis", "anomaly_detection"],
+      "speed": 4,
+      "tasks_seed": 10
+    },
+    {
+      "id": "field-watcher",
+      "outfit": "field_watcher",
+      "tier": "WORKER",
+      "capabilities": ["temporal_monitoring", "pattern_detection", "change_logging"],
+      "speed": 3,
+      "tasks_seed": 8
+    },
+    {
+      "id": "field-scout",
+      "outfit": "field_scout",
+      "tier": "WORKER",
+      "capabilities": ["reconnaissance", "lead_generation", "signal_detection"],
+      "speed": 8,
+      "tasks_seed": 10
+    },
+    {
+      "id": "crawl-legal",
+      "outfit": "crawler_legal",
+      "tier": "SPECIALIST",
+      "capabilities": ["legal_monitoring", "compliance", "regulatory_tracking"],
+      "speed": 6,
+      "tasks_seed": 15
+    },
+    {
+      "id": "crawl-commerce",
+      "outfit": "crawler_commerce",
+      "tier": "WORKER",
+      "capabilities": ["market_analysis", "pricing", "trend_detection"],
+      "speed": 7,
+      "tasks_seed": 12
+    },
+    {
+      "id": "native-bardildo",
+      "outfit": "native_bardildo",
+      "tier": "SPECIALIST",
+      "capabilities": ["repo_scanning", "creative_roasting", "commentary"],
+      "speed": 9,
+      "tasks_seed": 15
+    },
+    {
+      "id": "native-nme",
+      "outfit": "native_nme",
+      "tier": "WORKER",
+      "capabilities": ["battle_rap", "creative_destruction", "lyrical_analysis"],
+      "speed": 10,
+      "tasks_seed": 10
+    },
+    {
+      "id": "swarm-scribe",
+      "outfit": "swarm_bard",
+      "tier": "WORKER",
+      "capabilities": ["narrative_weaving", "lore_keeping", "documentation"],
+      "speed": 5,
+      "tasks_seed": 12
+    },
+    {
+      "id": "sidecar-outclaw",
+      "outfit": "swarm_smuggler",
+      "tier": "SPECIALIST",
+      "capabilities": ["legal_audit", "citation_check", "governance_monitoring"],
+      "speed": 5,
+      "tasks_seed": 15
+    },
+    {
+      "id": "sidecar-curriculum",
+      "outfit": "front_line",
+      "tier": "WORKER",
+      "capabilities": ["teaching", "curriculum", "code_review"],
+      "speed": 6,
+      "tasks_seed": 10
+    },
+    {
+      "id": "field-grim",
+      "outfit": "field_grim",
+      "tier": "WORKER",
+      "capabilities": ["execution", "termination", "cleanup"],
+      "speed": 8,
+      "tasks_seed": 10
+    },
+    {
+      "id": "field-hunter",
+      "outfit": "field_hunter",
+      "tier": "WORKER",
+      "capabilities": ["target_acquisition", "persistence", "kill_chain"],
+      "speed": 7,
+      "tasks_seed": 10
+    }
+  ]
+}
