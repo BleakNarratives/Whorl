@@ -117,29 +117,7 @@ def cfg() -> WhorlConfig:
         _cfg = load()
     return _cfg
 
-# ── API key loader ─────────────────────────────────────────────────────────
-
-def load_api_keys() -> dict:
-    secrets_path = WHORL_DIR / "secrets.toml"
-    keys = {}
-    if secrets_path.exists():
-        import toml
-        keys = toml.loads(secrets_path.read_text()).get("api_keys", {})
-    for name in ["OPENAI", "GROQ", "MISTRAL", "GEMINI", "ANTHROPIC"]:
-        env_val = os.getenv(f"{name}_API_KEY")
-        if env_val:
-            keys[name.lower()] = env_val
-    return keys
-
-# ── Unified key loading (delegated to vault) ───────────────────────────────
-
-def load_api_keys() -> dict:
-    """Delegate to vault module for unified key loading."""
-    # Lazy import to avoid circular deps
-    from . import vault
-    return vault.load_api_keys()
-
-# ── Unified key loading (delegated to vault) ───────────────────────────────
+# ── API key loader (delegated to vault) ────────────────────────────────────
 
 def load_api_keys() -> dict:
     """Delegate to vault module for unified key loading."""

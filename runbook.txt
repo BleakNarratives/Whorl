@@ -1,0 +1,35 @@
+WHORL — OPERATIONAL RUNBOOK
+=============================
+
+PURPOSE
+-------
+Whorl is the declarative routing and data-weaving layer for the bleaknarratives
+ecosystem. It contains the Loom implementation — Celtic knot-inspired
+cryptographic topological data weaving.
+
+KEY FILES
+---------
+whorl_v0.1.0.tar.gz    — Complete Loom scanner/layout implementation (donor)
+pyproject.toml         — Python package configuration
+
+SAFE OPERATIONS
+---------------
+# List archive contents without extracting
+tar tzf whorl_v0.1.0.tar.gz 2>/dev/null | head -30
+
+# Check Python package structure
+cat pyproject.toml
+
+DANGEROUS OPERATIONS
+--------------------
+- The Loom implementation is a CONCEPTUAL donor. Its cryptographic claims
+  are not a substitute for standard authenticated encryption.
+- Do NOT extract the tarball into the working tree — extract to a sandbox
+- The Whorl interpreter/runtime is deferred pending full recovery
+
+RECOVERY NOTES
+--------------
+- whorl_v0.1.0.tar.gz contains implementation files missing from checked-out tree
+- SyntaxIntelligence, Boardroom, and RAG seal are separate but related projects
+- Whorl is part of the RootBase aggregation hub
+- The celtic-loom/ directory is a separate concept donor
