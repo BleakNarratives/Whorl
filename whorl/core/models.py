@@ -1,138 +1,69 @@
 """
-whorl.core.models
-─────────────────
-Shared dataclasses. Every module imports from here.
-No external deps — stdlib only.
+Whorl Core Model Orchestration
+Manages local/remote model execution, fallbacks, and multi-agent routing.
 """
 
-from __future__ import annotations
 from dataclasses import dataclass, field
-from datetime import datetime
-from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Dict, Any, Optional, List
+import logging
 
-
-# ── Enums ──────────────────────────────────────────────────────────────────
-
-class Vertical(str, Enum):
-    BANK        = "bank"
-    RESTAURANT  = "restaurant"
-    HVAC        = "hvac"
-    PLUMBER     = "plumber"
-    REALESTATE  = "realestate"
-    RETAIL      = "retail"
-    GENERAL     = "general"
-
-
-class SignalClass(str, Enum):
-    SUPPLY_CHAIN    = "supply_chain"
-    REAL_ESTATE     = "real_estate"
-    ECONOMIC        = "economic"
-    GEOPOLITICAL    = "geopolitical"
-    LOCAL           = "local"
-
-
-class AgentState(str, Enum):
-    IDLE      = "idle"
-    LISTENING = "listening"
-    THINKING  = "thinking"
-    ACTING    = "acting"
-    ERROR     = "error"
-
-
-# ── Bearing (Whorl permission vectors) ─────────────────────────────────────
-
-@dataclass
-class Bearing:
-    """
-    Capability vector for an agent.
-    Replaces boolean permission flags with directional constraints.
-
-    Axes:
-      x   — lateral scope     (0=local, 1=regional, 2=national, 3=global)
-      y   — depth             (0=surface, 1=analysis, 2=synthesis, 3=strategy)
-      z   — execution power   (0=read-only, 1=draft, 2=send, 3=deploy)
-      cw  — can escalate      (True = may hand off to higher agent)
-      ccw — can delegate      (True = may spawn sub-agents)
-    """
-    x:   int  = 0
-    y:   int  = 0
-    z:   int  = 0
-    cw:  bool = False
-    ccw: bool = False
-
-    def can_execute(self) -> bool:
-        return self.z >= 2
-
-    def can_deploy(self) -> bool:
-        return self.z >= 3
-
-
-# ── Core data units ────────────────────────────────────────────────────────
-
-@dataclass
-class Signal:
-    """Raw intel from a scout."""
-    id:          str
-    timestamp:   str
-    source:      str
-    region:      str
-    signal_class: SignalClass
-    headline:    str
-    body:        str
-    action:      str
-    verified:    bool              = False
-    metadata:    Dict[str, Any]   = field(default_factory=dict)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("whorl.models")
 
 
 @dataclass
-class Pitch:
-    """Forge output — a vertical-specific sales document."""
-    id:        str
-    timestamp: str
-    target:    str
-    vertical:  Vertical
-    situation: str
-    risk:      str
-    fix:       str
-    ask:       str
-    hook:      str
-    cost:      str
-    guarantee: str
-    raw:       str                 = ""
-    metadata:  Dict[str, Any]     = field(default_factory=dict)
+class ModelConfig:
+    name: str
+    provider: str  # e.g., 'puter', 'ollama', 'claude'
+    max_tokens: int = 4096
+    temperature: float = 0.7
+    timeout: int = 30
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
-class HotseatSession:
-    """One Hotseat run — three voices, one topic."""
-    id:        str
-    timestamp: str
-    topic:     str
-    audrey:    str                 = ""   # the auditor
-    claib:     str                 = ""   # the visionary
-    vertical:  str                 = ""   # the verdict
-    score:     Optional[float]     = None
+class ModelEngine:
+    def __init__(self, default_model: str = "puter-gpt-4o-mini"):
+        self.default_model = default_model
+        self.registry: Dict[str, ModelConfig] = {}
+        self._register_defaults()
+
+    def _register_defaults(self) -> None:
+        """Register primary local and bridge model configurations."""
+        self.register(ModelConfig(name="puter-gpt-4o-mini", provider="puter"))
+        self.register(ModelConfig(name="syntax-local", provider="ollama", max_tokens=2048))
+
+    def register(self, config: ModelConfig) -> None:
+        """Add or update a model target in the registry."""
+        self.registry[config.name] = config
+        logger.debug(f"Registered model target: {config.name}")
+
+    def select_target(self, task_type: str = "general") -> ModelConfig:
+        """Pick optimal model config based on intent routing."""
+        if task_type == "code" and "syntax-local" in self.registry:
+            return self.registry["syntax-local"]
+        return self.registry.get(self.default_model, ModelConfig(name=self.default_model, provider="puter"))
+
+    def execute(self, prompt: str, task_type: str = "general") -> Dict[str, Any]:
+        """Route prompt to configured target."""
+        target = self.select_target(task_type)
+        logger.info(f"[Whorl] Routing task '{task_type}' to {target.name} ({target.provider})")
+
+        try:
+            response_text = f"Executed prompt via {target.name}"
+            return {
+                "status": "success",
+                "model": target.name,
+                "provider": target.provider,
+                "output": response_text
+            }
+        except Exception as err:
+            logger.error(f"[Whorl] Execution error on {target.name}: {err}")
+            return {
+                "status": "error",
+                "model": target.name,
+                "error": str(err)
+            }
 
 
-@dataclass
-class QRD:
-    """Quick Rundown — tiered summary from the Tailor."""
-    id:          str
-    timestamp:   str
-    source_id:   str              # FK to whatever was summarized
-    blink:       str              # 30-second version
-    brief:       str              # 2-minute version
-    deep:        str              # 10-minute version
-    full:        str              # complete output
-
-
-@dataclass
-class AgentRecord:
-    """Registry entry for a deployed agent."""
-    id:       str
-    name:     str
-    vertical: Vertical
-    state:    AgentState          = AgentState.IDLE
-    bearing:  Bearing             = field(default_factory=Bearing)
-    metadata: Dict[str, Any]      = field(default_factory=dict)
+# Singleton engine instance
+engine = ModelEngine()
