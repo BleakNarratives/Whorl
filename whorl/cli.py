@@ -24,6 +24,8 @@ import argparse
 import sys
 from typing import List
 
+from whorl.bus.cli import add_parser as add_bus_parser
+
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -305,6 +307,9 @@ def build_parser() -> argparse.ArgumentParser:
     ast_init = ast_sub.add_parser("init", help="Initialize known agents")
     ast_init.add_argument("--agent", default=None, help="Specific agent (default: all known)")
 
+    # bus
+    add_bus_parser(sub)
+
     # arena
     ar = sub.add_parser("arena", help="Red/blue combat arena")
     ar_sub = ar.add_subparsers(dest="ar_cmd")
@@ -318,6 +323,48 @@ def build_parser() -> argparse.ArgumentParser:
     ar_sig.add_argument("--last", type=int, default=10, help="Number of signals")
 
     return p
+
+
+# ── Bus handlers ─────────────────────────────────────────────────────────
+
+def cmd_bus_status(args):
+    from whorl.bus.cli import cmd_status
+    cmd_status(args)
+
+
+def cmd_bus_send(args):
+    from whorl.bus.cli import cmd_send
+    cmd_send(args)
+
+
+def cmd_bus_read(args):
+    from whorl.bus.cli import cmd_read
+    cmd_read(args)
+
+
+def cmd_bus_registry(args):
+    from whorl.bus.cli import cmd_registry
+    cmd_registry(args)
+
+
+def cmd_bus_ack(args):
+    from whorl.bus.cli import cmd_ack
+    cmd_ack(args)
+
+
+def cmd_bus_expire(args):
+    from whorl.bus.cli import cmd_expire
+    cmd_expire(args)
+
+
+def cmd_bus_dead(args):
+    from whorl.bus.cli import cmd_dead
+    cmd_dead(args)
+
+
+def cmd_bus_retry(args):
+    from whorl.bus.cli import cmd_retry
+    cmd_retry(args)
 
 
 # ── Entry point ────────────────────────────────────────────────────────────
@@ -366,6 +413,14 @@ def main(argv: List[str] = None):
         ("arena", "leaderboard"): cmd_arena_leaderboard,
         ("arena", "challenges"):  cmd_arena_challenges,
         ("arena", "signals"):     cmd_arena_signals,
+        ("bus", "status"): cmd_bus_status,
+        ("bus", "send"): cmd_bus_send,
+        ("bus", "read"): cmd_bus_read,
+        ("bus", "registry"): cmd_bus_registry,
+        ("bus", "ack"): cmd_bus_ack,
+        ("bus", "expire"): cmd_bus_expire,
+        ("bus", "dead"): cmd_bus_dead,
+        ("bus", "retry"): cmd_bus_retry,
     }
 
     sub_attr = {
@@ -375,6 +430,7 @@ def main(argv: List[str] = None):
         "fire-drill": "fd_cmd",
         "guard": "gd_cmd",
         "agent-state": "ast_cmd",
+        "bus": "bus_cmd",
         "arena": "ar_cmd",
     }
 
