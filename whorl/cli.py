@@ -305,6 +305,18 @@ def build_parser() -> argparse.ArgumentParser:
     ast_init = ast_sub.add_parser("init", help="Initialize known agents")
     ast_init.add_argument("--agent", default=None, help="Specific agent (default: all known)")
 
+    # arena
+    ar = sub.add_parser("arena", help="Red/blue combat arena")
+    ar_sub = ar.add_subparsers(dest="ar_cmd")
+    ar_sub.add_parser("status", help="Show agents, ELO, recent signals")
+    ar_sub.add_parser("combat", help="Run one round (red vs blue)")
+    ar_comb = ar_sub.add_parser("sweep", help="Run N rounds with survival tracking")
+    ar_comb.add_argument("--rounds", type=int, default=5, help="Number of rounds")
+    ar_sub.add_parser("leaderboard", help="ELO rankings")
+    ar_sub.add_parser("challenges", help="List available challenges")
+    ar_sig = ar_sub.add_parser("signals", help="Recent signal log")
+    ar_sig.add_argument("--last", type=int, default=10, help="Number of signals")
+
     return p
 
 
@@ -348,6 +360,12 @@ def main(argv: List[str] = None):
         ("agent-state", "branch"):  cmd_agent_state_branch,
         ("agent-state", "switch"):  cmd_agent_state_switch,
         ("agent-state", "init"):    cmd_agent_state_init,
+        ("arena", "status"):      cmd_arena_status,
+        ("arena", "combat"):      cmd_arena_combat,
+        ("arena", "sweep"):       cmd_arena_sweep,
+        ("arena", "leaderboard"): cmd_arena_leaderboard,
+        ("arena", "challenges"):  cmd_arena_challenges,
+        ("arena", "signals"):     cmd_arena_signals,
     }
 
     sub_attr = {
@@ -357,6 +375,7 @@ def main(argv: List[str] = None):
         "fire-drill": "fd_cmd",
         "guard": "gd_cmd",
         "agent-state": "ast_cmd",
+        "arena": "ar_cmd",
     }
 
     sub_cmd = getattr(args, sub_attr.get(args.command, "_x"), None)
@@ -569,6 +588,75 @@ def cmd_agent_state_init(args):
     else:
         added = init_known_agents()
         print(f"  ✅ Initialized {added} agents.")
+
+
+# ── Arena handlers ──────────────────────────────────────────────────────
+
+def cmd_arena_status(args):
+    _boot()
+    from whorl.arena import status_report
+    print(status_report())
+
+
+def cmd_arena_combat(args):
+    _boot()
+    from whorl.arena import run_round
+    run_round()
+
+
+def cmd_arena_sweep(args):
+    _boot()
+    from whorl.arena import run_sweep
+    run_sweep(rounds=args.rounds)
+
+
+def cmd_arena_leaderboard(args):
+    _boot()
+    from whorl.arena import leaderboard
+    print(leaderboard())
+
+
+def cmd_arena_challenges(args):
+    _boot()
+    from whorl.arena import CHALLENGES
+    print(f"\n  {'ID':<22} {'Title':<25} {'Category':<12} {'Difficulty'}")
+    print(f"  {'-'*70}")
+    for c in CHALLENGES:
+        print(f"  {c['id']:<22} {c['title']:<25} {c['category']:<12} {c['difficulty']}")
+    print()
+
+
+def cmd_arena_signals(args):
+    _boot()
+    from whorl.arena import recent_signals
+    signals = recent_signals(limit=args.last)
+    if not signals:
+        print("  [arena] No signals yet.")
+        return
+    print(f"\n  {'Time':<20} {'Signal':<25} {'Key Data'}")
+    print(f"  {'-'*70}")
+    for s in signals:
+        ts = s['timestamp'][:19]
+        sig = s['signal']
+        data = s.get('data', {})
+        if 'agent' in data:
+            key = f"{data['agent']} "
+            if 'score' in data:
+                key += f"score={data['score']:.3f}" if isinstance(data['score'], float) else f"{data.get('score', '')}"
+            elif 'winner' in data:
+                key += f"winner={data['winner']}"
+            elif 'before' in data:
+                key += f"{data['before']}→{data.get('after', '?')}"
+            else:
+                key += str(data.get('excerpt', ''))[:30]
+        elif 'winner' in data:
+            key = f"red={data.get('red_score',0):.2f} blue={data.get('blue_score',0):.2f} winner={data['winner']}"
+        elif 'rounds' in data:
+            key = f"{data['rounds']} rounds, {data.get('red_wins',0)}R/{data.get('blue_wins',0)}B/{data.get('draws',0)}D"
+        else:
+            key = str(data)[:40]
+        print(f"  {ts} {sig:<25} {key}")
+    print()
 
 
 def cmd_vault_init(args):

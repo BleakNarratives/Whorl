@@ -157,6 +157,32 @@ _MIGRATIONS: List[str] = [
         timestamp   TEXT NOT NULL
     );
     """,
+    # v4 — arena tables (red/blue combat + ELO)
+    """
+    CREATE TABLE IF NOT EXISTS arena_rounds (
+        id              TEXT PRIMARY KEY,
+        challenge_id    TEXT,
+        red_agent       TEXT,
+        blue_agent      TEXT,
+        red_response    TEXT,
+        blue_response   TEXT,
+        red_score       REAL DEFAULT 0,
+        blue_score      REAL DEFAULT 0,
+        winner          TEXT,
+        red_elo_before  INTEGER DEFAULT 1000,
+        blue_elo_before INTEGER DEFAULT 1000,
+        red_elo_after   INTEGER DEFAULT 1000,
+        blue_elo_after  INTEGER DEFAULT 1000,
+        round_at        TEXT
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS arena_elos (
+        agent       TEXT PRIMARY KEY,
+        elo         INTEGER DEFAULT 1000,
+        updated_at  TEXT
+    );
+    """,
 ]
 
 _CURRENT_VERSION = len(_MIGRATIONS)
