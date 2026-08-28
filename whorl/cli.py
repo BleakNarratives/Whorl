@@ -273,6 +273,17 @@ def build_parser() -> argparse.ArgumentParser:
     fd_add.add_argument("--difficulty", default="medium")
     fd_sub.add_parser("seed", help="Insert built-in scenarios")
 
+    # guard
+    gd = sub.add_parser("guard", help="Service management (Whorl bus)")
+    gd_sub = gd.add_subparsers(dest="gd_cmd")
+    gd_sub.add_parser("status", help="Show tracked unit states")
+    gd_check = gd_sub.add_parser("check", help="Check unit statuses")
+    gd_check.add_argument("units", nargs="+", help="Unit names to check")
+    gd_check.add_argument("--system", action="store_true", help="Use system bus")
+    gd_restart = gd_sub.add_parser("restart", help="Restart a unit")
+    gd_restart.add_argument("unit", help="Unit name")
+    gd_restart.add_argument("--system", action="store_true", help="Use system bus")
+
     return p
 
 
@@ -306,6 +317,9 @@ def main(argv: List[str] = None):
         ("fire-drill", "run"):    cmd_fire_drill_run,
         ("fire-drill", "add"):    cmd_fire_drill_add,
         ("fire-drill", "seed"):   cmd_fire_drill_seed,
+        ("guard", "status"):   cmd_guard_status,
+        ("guard", "check"):    cmd_guard_check,
+        ("guard", "restart"):  cmd_guard_restart,
     }
 
     sub_attr = {
@@ -313,6 +327,7 @@ def main(argv: List[str] = None):
         "loom":  "loom_cmd",  "agent": "agent_cmd",
         "tailor":"tailor_cmd","db":    "db_cmd",
         "fire-drill": "fd_cmd",
+        "guard": "gd_cmd",
     }
 
     sub_cmd = getattr(args, sub_attr.get(args.command, "_x"), None)
@@ -395,6 +410,35 @@ def cmd_fire_drill_seed(args):
     from whorl.fire_drill import seed_builtins
     added = seed_builtins()
     print(f"[fire-drill] Seeded {added} built-in scenarios.")
+
+
+# ── Guard handlers ─────────────────────────────────────────────────────
+
+def cmd_guard_status(args):
+    _boot()
+    from whorl.guard import status_report
+    print(status_report())
+
+
+def cmd_guard_check(args):
+    _boot()
+    from whorl.guard import check_units
+    bus = "--system" if args.system else ""
+    statuses = check_units(args.units, bus=bus)
+    for unit, status in statuses.items():
+        icon = "✅" if status == "active" else "❌"
+        print(f"  {icon} {unit}: {status}")
+
+
+def cmd_guard_restart(args):
+    _boot()
+    from whorl.guard import restart_unit
+    bus = "--system" if args.system else "--user"
+    success, rc, stderr = restart_unit(args.unit, bus=bus)
+    if success:
+        print(f"  ✅ {args.unit}: restarted")
+    else:
+        print(f"  ❌ {args.unit}: failed (rc={rc}) {stderr[:100]}")
 
 
 def cmd_vault_init(args):

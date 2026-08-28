@@ -137,6 +137,26 @@ _MIGRATIONS: List[str] = [
         finished_at  TEXT
     );
     """,
+    # v3 — guard tables (service management audit trail)
+    """
+    CREATE TABLE IF NOT EXISTS guard_unit_state (
+        unit          TEXT PRIMARY KEY,
+        status        TEXT DEFAULT 'unknown',
+        bus           TEXT DEFAULT 'user',
+        last_checked  TEXT
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS guard_actions (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        unit        TEXT NOT NULL,
+        action      TEXT NOT NULL,
+        success     INTEGER DEFAULT 0,
+        returncode  INTEGER DEFAULT 0,
+        stderr      TEXT DEFAULT '',
+        timestamp   TEXT NOT NULL
+    );
+    """,
 ]
 
 _CURRENT_VERSION = len(_MIGRATIONS)
