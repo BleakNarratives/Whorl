@@ -374,6 +374,18 @@ def run_drill(scenario_id: str, agent_name: str, verbose: bool = True) -> dict:
         scenario["id"], agent_name, response, scores, latency, passed,
     )
 
+    # Feed score into agent state version tracking
+    try:
+        from whorl import agent_state
+        agent_state.record_score(
+            agent_name,
+            source="fire_drill",
+            detail=f"{scenario['name']}: {composite:.3f} {'PASS' if passed else 'FAIL'}",
+            scores_update={"fire_drill": {"last": composite, "passed": passed}},
+        )
+    except Exception:
+        pass  # non-fatal — agent state tracking is optional
+
     if verbose:
         status = "✅" if passed else "❌"
         print(f" {status} score={composite:.3f} ({latency:.1f}s)")
