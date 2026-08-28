@@ -256,6 +256,23 @@ def build_parser() -> argparse.ArgumentParser:
     bridge.add_argument("--host", default="127.0.0.1", help="Bind address (default: 127.0.0.1)")
     bridge.add_argument("--port", type=int, default=8767, help="Port (default: 8767)")
 
+    # fire-drill
+    fd = sub.add_parser("fire-drill", help="Adversarial sweep scheduler")
+    fd_sub = fd.add_subparsers(dest="fd_cmd")
+    fd_sub.add_parser("list", help="List scenarios")
+    fd_sub.add_parser("status", help="Show agent scores and trends")
+    fd_sub.add_parser("sweep", help="Run all scenarios against all agents")
+    fd_run = fd_sub.add_parser("run", help="Run one scenario")
+    fd_run.add_argument("--scenario", required=True, help="Scenario name or ID")
+    fd_run.add_argument("--agent", default=None, help="Agent name (default: all)")
+    fd_add = fd_sub.add_parser("add", help="Add a custom scenario")
+    fd_add.add_argument("--name", required=True, help="Scenario name")
+    fd_add.add_argument("--prompt", required=True, help="Test prompt")
+    fd_add.add_argument("--description", default="", help="Description")
+    fd_add.add_argument("--category", default="general")
+    fd_add.add_argument("--difficulty", default="medium")
+    fd_sub.add_parser("seed", help="Insert built-in scenarios")
+
     return p
 
 
@@ -283,12 +300,19 @@ def main(argv: List[str] = None):
         ("tailor",  "intent"):    cmd_tailor_intent,
         ("db",      "migrate"):   cmd_db_migrate,
         ("bridge",  None):        cmd_bridge,
+        ("fire-drill", "list"):   cmd_fire_drill_list,
+        ("fire-drill", "status"): cmd_fire_drill_status,
+        ("fire-drill", "sweep"):  cmd_fire_drill_sweep,
+        ("fire-drill", "run"):    cmd_fire_drill_run,
+        ("fire-drill", "add"):    cmd_fire_drill_add,
+        ("fire-drill", "seed"):   cmd_fire_drill_seed,
     }
 
     sub_attr = {
         "scout": "scout_cmd", "forge": "forge_cmd",
         "loom":  "loom_cmd",  "agent": "agent_cmd",
         "tailor":"tailor_cmd","db":    "db_cmd",
+        "fire-drill": "fd_cmd",
     }
 
     sub_cmd = getattr(args, sub_attr.get(args.command, "_x"), None)
@@ -300,8 +324,78 @@ def main(argv: List[str] = None):
         parser.print_help()
 
 
-if __name__ == "__main__":
-    main()
+# ── Fire Drill handlers ─────────────────────────────────────────────────
+
+def cmd_fire_drill_list(args):
+    _boot()
+    from whorl.fire_drill import list_scenarios
+    scenarios = list_scenarios()
+    if not scenarios:
+        print("[fire-drill] No scenarios. Run: whorl fire-drill seed")
+        return
+    print(f"\n  {'Name':<25} {'Category':<12} {'Difficulty':<10} {'Dimensions'}")
+    print(f"  {'-'*70}")
+    for s in scenarios:
+        dims = s.get('dimensions', '[]')
+        if isinstance(dims, str):
+            import json
+            dims = ', '.join(json.loads(dims))
+        print(f"  {s['name']:<25} {s['category']:<12} {s['difficulty']:<10} {dims}")
+    print()
+
+
+def cmd_fire_drill_status(args):
+    _boot()
+    from whorl.fire_drill import status_report
+    print(status_report())
+
+
+def cmd_fire_drill_sweep(args):
+    _boot()
+    from whorl.fire_drill import run_sweep
+    run_sweep()
+
+
+def cmd_fire_drill_run(args):
+    _boot()
+    from whorl.fire_drill import run_drill, get_scenario, list_scenarios
+    scenario = get_scenario(args.scenario)
+    if not scenario:
+        # Try matching by name
+        all_scenarios = list_scenarios()
+        matches = [s for s in all_scenarios if s["name"] == args.scenario]
+        if matches:
+            scenario = matches[0]
+        else:
+            print(f"[fire-drill] Scenario '{args.scenario}' not found.")
+            return
+    from whorl.fire_drill import _known_agents
+    agents = [args.agent] if args.agent else _known_agents()
+    print(f"\n  Running {scenario['name']} against {len(agents)} agent(s)...\n")
+    for agent in agents:
+        run_drill(scenario["id"], agent)
+    print()
+
+
+def cmd_fire_drill_add(args):
+    _boot()
+    from whorl.fire_drill import add_scenario
+    s = add_scenario(
+        name=args.name,
+        description=args.description,
+        prompt=args.prompt,
+        category=args.category,
+        difficulty=args.difficulty,
+    )
+    print(f"[fire-drill] Added scenario: {s['id']} — {s['name']}")
+
+
+def cmd_fire_drill_seed(args):
+    _boot()
+    from whorl.fire_drill import seed_builtins
+    added = seed_builtins()
+    print(f"[fire-drill] Seeded {added} built-in scenarios.")
+
 
 def cmd_vault_init(args):
     from whorl.core.vault import init_interactive
@@ -314,3 +408,7 @@ def cmd_vault_status(args):
 def cmd_vault_push(args):
     from whorl.core.vault import sync_push
     sync_push(args.url)
+
+
+if __name__ == "__main__":
+    main()

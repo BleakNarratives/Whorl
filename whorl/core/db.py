@@ -96,6 +96,47 @@ _MIGRATIONS: List[str] = [
         relayed   INTEGER DEFAULT 0
     );
     """,
+    # v2 — fire drill tables (adversarial sweep scheduler)
+    """
+    CREATE TABLE IF NOT EXISTS fire_drill_scenarios (
+        id          TEXT PRIMARY KEY,
+        name        TEXT NOT NULL,
+        description TEXT,
+        category    TEXT DEFAULT 'general',
+        prompt      TEXT NOT NULL,
+        difficulty  TEXT DEFAULT 'medium',
+        dimensions  TEXT DEFAULT '[]',
+        active      INTEGER DEFAULT 1,
+        created_at  TEXT NOT NULL
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS fire_drill_runs (
+        id           TEXT PRIMARY KEY,
+        scenario_id  TEXT NOT NULL,
+        agent_name   TEXT NOT NULL,
+        response     TEXT,
+        scores       TEXT DEFAULT '{}',
+        latency_s    REAL DEFAULT 0,
+        passed       INTEGER DEFAULT 0,
+        notes        TEXT,
+        run_at       TEXT NOT NULL,
+        FOREIGN KEY (scenario_id) REFERENCES fire_drill_scenarios(id)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS fire_drill_sweeps (
+        id           TEXT PRIMARY KEY,
+        name         TEXT,
+        scenario_ids TEXT DEFAULT '[]',
+        agent_names  TEXT DEFAULT '[]',
+        total_runs   INTEGER DEFAULT 0,
+        passed       INTEGER DEFAULT 0,
+        failed       INTEGER DEFAULT 0,
+        started_at   TEXT NOT NULL,
+        finished_at  TEXT
+    );
+    """,
 ]
 
 _CURRENT_VERSION = len(_MIGRATIONS)
