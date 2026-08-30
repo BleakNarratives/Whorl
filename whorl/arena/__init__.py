@@ -568,9 +568,9 @@ def run_round(red_agent: str = None, blue_agent: str = None,
         red_elo_before, blue_elo_before, new_red, new_blue,
     )
 
-    # Feed into agent_state
-    _feed_agent_state(red_agent, "red", scores, challenge)
-    _feed_agent_state(blue_agent, "blue", scores, challenge)
+    # Feed into agent_state with full stats
+    _feed_agent_state(red_agent, "red", scores, challenge, elo_after=new_red)
+    _feed_agent_state(blue_agent, "blue", scores, challenge, elo_after=new_blue)
 
     # ── SIGNAL: round_end ──
     emit("arena.round_end", {
@@ -602,21 +602,35 @@ def run_round(red_agent: str = None, blue_agent: str = None,
 
 
 def _feed_agent_state(agent_name: str, team: str, scores: dict,
-                      challenge: dict) -> None:
-    """Record arena result into agent_state version tracking."""
+                      challenge: dict, elo_after: int = 1000) -> None:
+    """Record arena result into agent_state with full stats for rank eval."""
     try:
         from whorl import agent_state
         team_score = scores[f"{team}_score"]
         winner = scores["winner"]
+        won = winner == team
         detail = (
             f"arena:{challenge['id']} team={team} "
-            f"score={team_score:.3f} {'WIN' if winner == team else 'LOSE' if winner != 'draw' else 'DRAW'}"
+            f"score={team_score:.3f} {'WIN' if won else 'LOSE' if winner != 'draw' else 'DRAW'}"
         )
+
+        # Build cumulative stats from current state
+        state = agent_state.current(agent_name)
+        old_arena = state.get("scores", {}).get("arena", {}) if state else {}
+        new_wins = old_arena.get("wins", 0) + (1 if won else 0)
+        new_rounds = old_arena.get("rounds", 0) + 1
+
         agent_state.record_score(
             agent_name,
             source="arena",
             detail=detail,
-            scores_update={"arena": {"last": team_score, "team": team}},
+            scores_update={"arena": {
+                "last": team_score,
+                "team": team,
+                "wins": new_wins,
+                "rounds": new_rounds,
+                "elo": elo_after,
+            }},
         )
     except Exception:
         pass

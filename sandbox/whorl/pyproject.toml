@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "whorl"
+version = "0.1.0"
+description = "A modular field intelligence and agent deployment workbench."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "requests",
+    "toml",
+]
+
+[project.optional-dependencies]
+scouts  = ["feedparser"]
+hotseat = []                          # uses Ollama via requests (already in core)
+loom    = []                          # stdlib only (ast, os)
+agents  = []
+tailor  = []
+nostr   = ["websockets"]
+all     = ["whorl[scouts,nostr]"]
+
+[project.scripts]
+whorl = "whorl.cli:main"
+
+[tool.setuptools.packages.find]
+where   = ["."]
+include = ["whorl*"]

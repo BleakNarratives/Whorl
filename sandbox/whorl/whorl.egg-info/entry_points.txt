@@ -1,0 +1,2 @@
+[console_scripts]
+whorl = whorl.cli:main

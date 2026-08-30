@@ -52,6 +52,220 @@ from typing import Any, Dict, List, Optional, Tuple
 from whorl.core.config import WHORL_DIR
 
 
+# ── Rank System ──────────────────────────────────────────────────────────
+#
+# Ranks are earned through combat. Each rank has measurable criteria.
+# Agents auto-promote when they cross a threshold. They can also
+# request a rank change if they meet the standard.
+#
+# The rank is stored in the agent's state and displayed as a badge.
+# History records every promotion — it's a permanent part of the record.
+
+RANKS = [
+    {
+        "rank": "RECRUIT",
+        "badge": "⬜",
+        "description": "Initial config. Has not been tested.",
+        "criteria": {},  # everyone starts here
+        "ordinal": 0,
+    },
+    {
+        "rank": "TESTED",
+        "badge": "🟩",
+        "description": "Survived first arena round. No longer a blank slate.",
+        "criteria": {"arena_rounds": 1},
+        "ordinal": 1,
+    },
+    {
+        "rank": "PROVEN",
+        "badge": "🟦",
+        "description": "Won 3+ arena rounds. Can hold a line.",
+        "criteria": {"arena_wins": 3},
+        "ordinal": 2,
+    },
+    {
+        "rank": "VETERAN",
+        "badge": "🟪",
+        "description": "5+ wins, ELO > 1050. Consistent performer.",
+        "criteria": {"arena_wins": 5, "elo_min": 1050},
+        "ordinal": 3,
+    },
+    {
+        "rank": "ELITE",
+        "badge": "🟧",
+        "description": "10+ wins, ELO > 1100. Top tier.",
+        "criteria": {"arena_wins": 10, "elo_min": 1100},
+        "ordinal": 4,
+    },
+    {
+        "rank": "CHAMPION",
+        "badge": "🟥",
+        "description": "Won a sweep, ELO > 1200. Arena ruler.",
+        "criteria": {"sweep_winner": True, "elo_min": 1200},
+        "ordinal": 5,
+    },
+    {
+        "rank": "LEGEND",
+        "badge": "⭐",
+        "description": "20+ wins, ELO > 1300. The name is known.",
+        "criteria": {"arena_wins": 20, "elo_min": 1300},
+        "ordinal": 6,
+    },
+]
+
+RANK_MAP = {r["rank"]: r for r in RANKS}
+
+
+def _compute_arena_stats(scores: dict) -> dict:
+    """Extract arena statistics from agent scores for rank evaluation."""
+    arena = scores.get("arena", {})
+    arena_detail = scores.get("arena_detail", {})
+
+    wins = arena.get("wins", 0)
+    rounds = arena.get("rounds", 0)
+    elo = arena.get("elo", 1000)
+    sweep_wins = arena.get("sweep_wins", 0)
+
+    return {
+        "arena_wins": wins,
+        "arena_rounds": rounds,
+        "elo": elo,
+        "sweep_winner": sweep_wins > 0,
+    }
+
+
+def evaluate_rank(name: str) -> str:
+    """Evaluate the highest rank an agent qualifies for.
+
+    Returns the rank name (e.g. 'VETERAN'). Does NOT promote —
+    caller decides whether to apply it.
+    """
+    state = current(name)
+    if not state:
+        return "RECRUIT"
+
+    stats = _compute_arena_stats(state.get("scores", {}))
+    current_rank = state.get("rank", "RECRUIT")
+    current_ordinal = RANK_MAP.get(current_rank, RANKS[0])["ordinal"]
+
+    # Check each rank from highest to lowest
+    for rank_def in reversed(RANKS):
+        if rank_def["ordinal"] <= current_ordinal:
+            continue  # can't demote via auto-eval
+        criteria = rank_def["criteria"]
+        met = True
+        for key, threshold in criteria.items():
+            if key == "arena_wins" and stats["arena_wins"] < threshold:
+                met = False
+            elif key == "arena_rounds" and stats["arena_rounds"] < threshold:
+                met = False
+            elif key == "elo_min" and stats["elo"] < threshold:
+                met = False
+            elif key == "sweep_winner" and not stats["sweep_winner"]:
+                met = False
+        if met:
+            return rank_def["rank"]
+
+    return current_rank
+
+
+def promote(name: str, new_rank: str = None) -> Optional[dict]:
+    """Promote an agent to the next earned rank.
+
+    If new_rank is None, auto-evaluates to the highest earned rank.
+    Returns the promotion event dict if promoted, None if already at rank.
+    """
+    state = current(name)
+    if not state:
+        return None
+
+    if new_rank is None:
+        new_rank = evaluate_rank(name)
+
+    current_rank = state.get("rank", "RECRUIT")
+    if new_rank == current_rank:
+        return None  # already at this rank
+
+    new_ordinal = RANK_MAP.get(new_rank, RANKS[0])["ordinal"]
+    current_ordinal = RANK_MAP.get(current_rank, RANKS[0])["ordinal"]
+
+    if new_ordinal < current_ordinal:
+        # Demotion — only allowed via explicit request
+        return None
+
+    # Apply promotion
+    badge = RANK_MAP[new_rank]["badge"]
+    state["rank"] = new_rank
+    state["history"] = state.get("history", []) + [
+        {
+            "at": _now(),
+            "event": "rank_promotion",
+            "from_rank": current_rank,
+            "to_rank": new_rank,
+            "badge": badge,
+            "detail": f"{badge} {current_rank} → {new_rank}: {RANK_MAP[new_rank]['description']}",
+        },
+    ]
+
+    # Write updated state (same version number — rank is metadata, not a new version)
+    _write_version(name, state)
+
+    return {
+        "agent": name,
+        "from_rank": current_rank,
+        "to_rank": new_rank,
+        "badge": badge,
+        "description": RANK_MAP[new_rank]["description"],
+    }
+
+
+def request_rank_change(name: str, requested_rank: str) -> Optional[dict]:
+    """Agent requests a rank change. Only granted if criteria are met.
+
+    Agents can request demotion (to a lower rank) or promotion.
+    Both require meeting the target rank's criteria.
+    """
+    state = current(name)
+    if not state:
+        return None
+
+    target_def = RANK_MAP.get(requested_rank)
+    if not target_def:
+        return None
+
+    stats = _compute_arena_stats(state.get("scores", {}))
+    criteria = target_def["criteria"]
+    met = True
+    for key, threshold in criteria.items():
+        if key == "arena_wins" and stats["arena_wins"] < threshold:
+            met = False
+        elif key == "arena_rounds" and stats["arena_rounds"] < threshold:
+            met = False
+        elif key == "elo_min" and stats["elo"] < threshold:
+            met = False
+        elif key == "sweep_winner" and not stats["sweep_winner"]:
+            met = False
+
+    if not met:
+        return {
+            "granted": False,
+            "reason": f"Criteria not met for {requested_rank}: {criteria}",
+            "current_stats": stats,
+        }
+
+    return promote(name, new_rank=requested_rank)
+
+
+def rank_badge(name: str) -> str:
+    """Get the rank badge string for display (e.g. '🟪 VETERAN')."""
+    state = current(name)
+    if not state:
+        return "⬜ RECRUIT"
+    rank = state.get("rank", "RECRUIT")
+    r = RANK_MAP.get(rank, RANKS[0])
+    return f"{r['badge']} {r['rank']}"
+
+
 # ── Paths ────────────────────────────────────────────────────────────────
 
 AGENTS_DIR = WHORL_DIR / "agents"
@@ -155,7 +369,8 @@ def init_agent(name: str, config: Dict[str, Any] = None) -> dict:
         "branch": "main",
         "parent": None,
         "timestamp": _now(),
-        "label": "initial",
+        "label": "recruit: initial config",
+        "rank": "RECRUIT",
         "config": config or {},
         "scores": {},
         "history": [
@@ -231,6 +446,11 @@ def record_score(name: str, source: str, detail: str,
     branches = _read_branches(name)
     branches[branch] = label
     _write_branches(name, branches)
+
+    # Auto-promote if earned
+    promotion = promote(name)
+    if promotion:
+        new_state["rank"] = promotion["to_rank"]
 
     return new_state
 
