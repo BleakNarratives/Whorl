@@ -22,6 +22,8 @@ DNA_TAG: ORIGIN=BleakNarratives/Whorl | ROLE=demo-harness | LAST_SYNC=2026-08-29
 from __future__ import annotations
 
 import argparse
+import os
+import pathlib
 import json
 import time
 import uuid
@@ -29,10 +31,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
-sys_path = str(Path(__file__).resolve().parent)
-if sys_path not in __import__("sys").path:
-    import sys as _sys
-    _sys.path.insert(0, sys_path)
+import sys as _sys
+
+_here = str(Path(__file__).resolve().parent)
+if _here not in _sys.path:
+    _sys.path.insert(0, _here)
 
 from whorl.tailor import parse_intent  # noqa: E402
 from whorl.signal_loom import CATEGORIES, SEVERITIES  # noqa: E402
@@ -88,20 +91,31 @@ NAIVE_SYSTEM = (
 )
 
 
+def _load_groq_key() -> Optional[str]:
+    """Read the Groq key from Whorl's vault (secrets.toml) or env."""
+    key_path = Path.home() / ".whorl" / "secrets.toml"
+    if key_path.exists():
+        try:
+            import toml
+
+            key = toml.loads(key_path.read_text()).get("api_keys", {}).get("groq")
+            if key:
+                return key
+        except Exception:
+            pass
+    key = os.environ.get("GROQ_API_KEY")
+    return key or None
+
+
 def _llm_raw(prompt: str, system: str, timeout: int = 45) -> str:
     """Minimal direct LLM call (Groq), used only for the naive baseline."""
     import requests
 
-    key_path = Path.home() / ".whorl" / "secrets.toml"
-    key = None
-    if key_path.exists():
-        try:
-            import toml
-            key = toml.loads(key_path.read_text()).get("api_keys", {}).get("groq")
-        except Exception:
-            key = None
+    key = _load_groq_key()
     if not key:
-        raise RuntimeError("No Groq key for naive baseline — set GROQ_API_KEY or ~/.whorl/secrets.toml")
+        raise RuntimeError(
+            "No Groq key for naive baseline — set GROQ_API_KEY or ~/.whorl/secrets.toml"
+        )
 
     r = requests.post(
         "https://api.groq.com/openai/v1/chat/completions",
@@ -149,43 +163,58 @@ def _intent_to_signals(intent: Dict) -> List[Dict]:
     paths = intent.get("execution_paths") or []
 
     if urgency >= 0.7:
-        signals.append({
-            "category": "workflow",
-            "severity": "critical" if urgency >= 0.85 else "high",
-            "detail": f"core_intent urgency {urgency}: {intent.get('core_intent', '')[:80]}",
-        })
+        signals.append(
+            {
+                "category": "workflow",
+                "severity": "critical" if urgency >= 0.85 else "high",
+                "detail": f"core_intent urgency {urgency}: {intent.get('core_intent', '')[:80]}",
+            }
+        )
     for c in constraints[:5]:
-        signals.append({
-            "category": "workflow",
-            "severity": "moderate",
-            "detail": f"constraint: {str(c)[:70]}",
-        })
+        signals.append(
+            {
+                "category": "workflow",
+                "severity": "moderate",
+                "detail": f"constraint: {str(c)[:70]}",
+            }
+        )
     if not paths:
-        signals.append({
-            "category": "workflow",
-            "severity": "moderate",
-            "detail": "no execution paths extracted — intent may be underspecified",
-        })
+        signals.append(
+            {
+                "category": "workflow",
+                "severity": "moderate",
+                "detail": "no execution paths extracted — intent may be underspecified",
+            }
+        )
     if not signals:
-        signals.append({"category": "workflow", "severity": "informational",
-                        "detail": "no urgent signals from intent"})
+        signals.append(
+            {
+                "category": "workflow",
+                "severity": "informational",
+                "detail": "no urgent signals from intent",
+            }
+        )
     return signals
 
 
 def _plan_from_signals(signals: List[Dict]) -> List[Dict]:
     """Deterministic, bounded intervention plan from ranked signals."""
-    sev_rank = {s: i for i, s in enumerate(
-        ["informational", "low", "moderate", "high", "critical"])}
+    sev_rank = {
+        s: i
+        for i, s in enumerate(["informational", "low", "moderate", "high", "critical"])
+    }
     ranked = sorted(signals, key=lambda s: -sev_rank.get(s.get("severity", "low"), 0))
     plan = []
     for i, s in enumerate(ranked[:5], 1):
-        plan.append({
-            "order": i,
-            "category": s.get("category", "workflow"),
-            "severity": s.get("severity", "low"),
-            "action": s.get("detail", ""),
-            "bounded": True,
-        })
+        plan.append(
+            {
+                "order": i,
+                "category": s.get("category", "workflow"),
+                "severity": s.get("severity", "low"),
+                "action": s.get("detail", ""),
+                "bounded": True,
+            }
+        )
     return plan
 
 
@@ -198,10 +227,17 @@ def run_whorl(dump: str) -> Dict:
         plan = _plan_from_signals(signals)
         ok = True
     except Exception as e:
-        intent, signals, plan = {}, [], []
+        intent, signals = {}, []
+        plan = [
+            {
+                "order": 1,
+                "category": "error",
+                "severity": "critical",
+                "action": f"pipeline failed: {e}",
+                "bounded": False,
+            }
+        ]
         ok = False
-        plan.append({"order": 1, "category": "error", "severity": "critical",
-                     "action": f"pipeline failed: {e}", "bounded": False})
     return {
         "side": "whorl",
         "ok": ok,
@@ -219,7 +255,10 @@ def run_whorl(dump: str) -> Dict:
 def render_side_by_side(naive: Dict, whorl: Dict) -> str:
     lines = []
     lines.append("=" * 78)
-    lines.append("LEFT: NAIVE (raw LLM, no structure)".ljust(39) + "| RIGHT: WHORL (intent -> IR -> plan)")
+    lines.append(
+        "LEFT: NAIVE (raw LLM, no structure)".ljust(39)
+        + "| RIGHT: WHORL (intent -> IR -> plan)"
+    )
     lines.append("=" * 78)
 
     n_lines = (naive.get("text") or "").splitlines() or [""]
@@ -230,13 +269,15 @@ def render_side_by_side(naive: Dict, whorl: Dict) -> str:
         left = n_lines[i] if i < len(n_lines) else ""
         if i < len(w_plan):
             p = w_plan[i]
-            right = f"[{p.get('severity','?'):>12}] {p.get('action','')[:45]}"
+            right = f"[{p.get('severity', '?'):>12}] {p.get('action', '')[:45]}"
         else:
             right = ""
         lines.append(f"{left[:37]:<37} | {right[:38]}")
     lines.append("=" * 78)
-    lines.append(f"naive latency: {naive.get('latency_s','?')}s".ljust(39)
-                 + f"| whorl latency: {whorl.get('latency_s','?')}s")
+    lines.append(
+        f"naive latency: {naive.get('latency_s', '?')}s".ljust(39)
+        + f"| whorl latency: {whorl.get('latency_s', '?')}s"
+    )
     return "\n".join(lines)
 
 
