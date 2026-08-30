@@ -136,9 +136,8 @@ def cmd_seat(args):
 
 def cmd_loom_scan(args):
     _boot()
-    # CodeCity-Bench lives in whorl/loom — import when ready
-    print(f"[loom] Scanning {args.path} ...")
-    print("[loom] (CodeCity-Bench integration — see whorl/loom/)")
+    from whorl.loom import scan
+    scan(args.path)
 
 
 def cmd_agent_yvette(args):
