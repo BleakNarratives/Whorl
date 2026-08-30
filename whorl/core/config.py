@@ -28,7 +28,7 @@ DEFAULTS: Dict[str, Any] = {
         "model_claib":    "llama3.2:1b",
         "model_vertical": "deepseek-coder:latest",
         "model_forge":    "llama3.2:1b",
-        "model_tailor":   "deepseek-coder:latest",
+        "model_tailor":   "openai/gpt-oss-120b",
     },
     "nostr": {
         "relay":      "wss://relay.damus.io",
