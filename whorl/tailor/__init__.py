@@ -61,8 +61,8 @@ def _call_llm(prompt, system, model=None):
         try:
             r = requests.post("https://api.groq.com/openai/v1/chat/completions",
                 headers={"Authorization": f"Bearer {keys['groq']}", "Content-Type": "application/json"},
-                json={"model": "llama-3.1-8b-instant", "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}], "temperature": 0.3},
-                timeout=15)
+                json={"model": model or "openai/gpt-oss-120b", "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}], "temperature": 0.3},
+                timeout=30)
             r.raise_for_status()
             return r.json()["choices"][0]["message"]["content"]
         except Exception as e:
