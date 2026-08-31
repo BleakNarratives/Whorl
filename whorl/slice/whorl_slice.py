@@ -63,6 +63,8 @@ class SampleResult:
     top_k: List[Tuple[str, float]]            # (token, prob) highest first
     confidence: float                          # 1.0 = sure, 0.0 = coin flip
     entropy: float
+    hidden_state: Optional[List[float]] = None # last-layer hidden vector (the payload)
+    logits: Optional[Dict[str, float]] = None  # token -> raw logit from the pass
     sliced: bool = False                       # True if this position hit a hole
     corrected: Optional[str] = None            # token the cloud pass returned
     correction_confidence: Optional[float] = None
@@ -76,7 +78,9 @@ class SliceLog:
     local_top1: str
     confidence: float
     sliced: bool
+    hidden_state_dim: int = 0                  # size of the transported vector
     corrected: Optional[str] = None
+    correction_confidence: Optional[float] = None
     latency_ms: float = 0.0
 
 
@@ -108,9 +112,11 @@ class ReferenceQ4Pass(LocalPass):
         hole_spacing: int = 4,
         seed: int = 7,
         vocab: Optional[List[str]] = None,
+        hidden_dim: int = 8,
     ) -> None:
         self.hole_spacing = max(1, int(hole_spacing))
         self._pos = 0
+        self._hidden_dim = max(4, int(hidden_dim))
         if vocab is None:
             vocab = [
                 "the", "and", "but", "if", "of", "to", "for", "not", "then",
@@ -159,8 +165,22 @@ class ReferenceQ4Pass(LocalPass):
         ent = -sum(p * math.log(p) for p in probs if p > 0)
         norm_ent = ent / math.log(len(toks)) if len(toks) > 1 else 0.0
         conf = 1.0 - norm_ent
-        return SampleResult(token=top_k[0][0], top_k=top_k, confidence=conf,
-                            entropy=ent)
+
+        # Hidden state: last-layer activation vector for this position. In the
+        # reference pass it's a deterministic LCG-driven embedding; a real GGUF
+        # backend would emit the actual last hidden layer here. This is the
+        # payload we ship to the cloud FP16 adjudicator when we hit a hole.
+        hs = [(self._next_prng() / 0x7FFFFFFF) for _ in range(self._hidden_dim)]
+        # compact, deterministic logits (raw) over the candidate tokens
+        logits = {
+            t: (r % 100) / 100.0 - 0.5 + (j * 0.13)
+            for j, t in enumerate(toks)
+        }
+        res = SampleResult(
+            token=top_k[0][0], top_k=top_k, confidence=conf, entropy=ent,
+            hidden_state=hs, logits=logits,
+        )
+        return res
 
 
 class LlamaServerPass(LocalPass):
@@ -228,28 +248,66 @@ class CloudFp16Pass:
         except Exception:  # noqa: BLE001
             self._router = None
 
-    def correct(self, context_tail: str, local_top1: str, confidence: float) -> Tuple[Optional[str], float]:
+    def correct(
+        self,
+        context_tail: str,
+        local_top1: str,
+        confidence: float,
+        hidden_state: Optional[List[float]] = None,
+        local_logits: Optional[Dict[str, float]] = None,
+    ) -> Tuple[Optional[str], Optional[Dict[str, float]], float]:
+        """Adjudicate a low-confidence position.
+
+        Returns (corrected_token, corrected_logits, latency_ms). The halide
+        (dense FP16) model sees the context plus a compact, human-readable
+        digest of the hidden state (its L2 norm + top dimensions) plus the local
+        top-k logits, and returns the most likely next token. corrected_logits is
+        the (smoothed) per-candidate logits we merge back into the local pass.
+        """
         if not self.available:
-            return None, 0.0
-        prompt = (
-            "You are a dense (FP16) adjudicator for a quantized local model.\n"
-            f"The local model produced the token {local_top1!r} with confidence "
-            f"{confidence:.3f} but is UNSURE (possible quantization collapse).\n"
-            "Context so far:\n---\n" + context_tail.strip()[-1500:] + "\n---\n"
-            "Reply with ONLY the single most likely next token. Do not explain."
-        )
+            return None, None, 0.0
         try:
+            hs_digest = ""
+            if hidden_state:
+                norm = math.sqrt(sum(x * x for x in hidden_state)) or 1.0
+                # report the strongest (absolute) dims as a numeric fingerprint
+                order = sorted(
+                    enumerate(hidden_state), key=lambda x: -abs(x[1]))[:4]
+                dims = ",".join(f"h{i}:{x:.3f}" for i, x in order)
+                hs_digest = f" hidden_norm={norm:.4f} top_dims=[{dims}]"
+            log_digest = (
+                ", ".join(f"{t}:{v:.2f}" for t, v in (
+                    sorted(local_logits.items(), key=lambda kv: -kv[1])[:5]
+                    if local_logits else []))
+            )
+            prompt = (
+                "You are a dense (FP16) adjudicator for an uncertain quantized "
+                "local model.\n"
+                f"Local token={local_top1!r} confidence={confidence:.3f} "
+                f"({hs_digest or 'hidden_digest=n/a'}).\n"
+                f"Local candidate logits: {log_digest or 'n/a'}.\n"
+                "Context:\n---\n" + context_tail.strip()[-1200:] + "\n---\n"
+                "Reply with ONLY the single most likely single next token."
+            )
             t0 = time.time()
             tier = getattr(self._tier, "FAST", "fast") if self._tier else "fast"
             text, prov = self._router.call_model(prompt, tier=tier)
-            latency = (time.time() - t0) * 1000.0
+            latency_ms = (time.time() - t0) * 1000.0
             tok = (text or "").strip().split("\n")[0].strip().split()[0] if (text or "").strip() else None
             if not tok:
-                return None, 0.0
+                return None, None, latency_ms
             self.provider = prov
-            return tok, max(0.0, min(1.0, confidence))
+            # corrected logits: blend the cloud's chosen token forward as a
+            # refined candidate set (per-token confidence of the adjudicator)
+            corrected_logits: Dict[str, float] = {}
+            if local_logits:
+                base = max(0.15, float(confidence))
+                for t in local_logits:
+                    corrected_logits[t] = base if t == tok else max(0.02, local_logits[t] * 0.4)
+                corrected_logits[tok] = corrected_logits.get(tok, 0.25) + 0.4
+            return tok, corrected_logits or None, latency_ms
         except Exception:  # noqa: BLE001
-            return None, 0.0
+            return None, None, 0.0
 
 
 # ---------------------------------------------------------------------------- #
@@ -284,12 +342,23 @@ class SliceController:
         for pos in range(max(1, int(max_tokens))):
             res = self.local.next_token(context)
             res.sliced = res.confidence < self.gate
+            latency_ms = 0.0
+            corrected_logits: Optional[Dict[str, float]] = None
             if res.sliced and self.cloud is not None:
-                corrected, conf = self.cloud.correct(context, res.token, res.confidence)
+                # ship the hidden state + local logits to the dense adjudicator
+                corrected, clg, latency_ms = self.cloud.correct(
+                    context, res.token, res.confidence,
+                    hidden_state=res.hidden_state, local_logits=res.logits,
+                )
                 res.corrected = corrected
-                res.correction_confidence = conf
+                corrected_logits = clg
                 if corrected:
                     res.token = corrected
+                # merge the cloud logit corrections back onto the local result
+                if clg:
+                    merged = list(res.top_k)
+                    merged = [(t, clg.get(t, p)) for t, p in merged]
+                    res.top_k = merged
             context = (context + " " + res.token).strip()[-2048:]
             self.history.append(SliceLog(
                 position=pos + 1,
@@ -297,8 +366,10 @@ class SliceController:
                 local_top1=res.token,
                 confidence=round(res.confidence, 4),
                 sliced=res.sliced,
+                hidden_state_dim=len(res.hidden_state) if res.hidden_state else 0,
                 corrected=res.corrected,
-                latency_ms=0.0,
+                correction_confidence=res.correction_confidence,
+                latency_ms=round(latency_ms, 1),
             ))
             out.append(res)
         return out
