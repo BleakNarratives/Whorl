@@ -18,6 +18,7 @@ No cloud. No Docker. SQLite + Ollama + Nostr.
 | `agents`  | Deployed agents. Yvette is first. |
 | `tailor`  | QRD Engine — tiered summaries. MindaIntent parser. |
 | `nostr`   | Distributed agent intercom via Nostr relays. |
+| `slice`   | whorl_slice — confidence-gated split inference. Local quant pass; on a low-confidence token (a “quantization hole”) ships the hidden state to a dense FP16 cloud adjudicator (Groq via Boardroom router) and merges corrected logits back. Offline ref default; llama-server GGUF backend wiring-ready. See `whorl/slice/whorl_slice.py`, `tests/test_slice*.py`. |
 | `core`    | Shared models, config, SQLite layer. |
 
 ---
