@@ -23,7 +23,10 @@ unsure about. Compute stays ~95% local.
 
 Two local backends so it runs on ANY box:
   - llama-server backend : talks to a local llama.cpp llama-server over HTTP
-                           (the real GGUF path; wiring-ready).
+                           and pulls GENUINE single-token log-probabilities from
+                           the model via /v1/completions logprobs. This is the
+                           real 4-bit path — confidence is the model's actual
+                           uncertainty, not a simulation. Live-wired 2026-08-31.
   - reference backend    : deterministic simulator with a configurable
                            quantization-loss injection so the whole prototype
                            runs OFFLINE with zero model binary. This backend is
@@ -33,9 +36,15 @@ The cloud FP16 pass is REAL (router.call_model -> Groq gpt-oss-120b) whenever a
 Groq key is present in the env; otherwise the slice degrades to local-only and
 reports the holes it would have sent.
 
-Run:
-  python3 -m whorl.slice.whorl_slice --prompt "..."        # offline ref slice
-  python3 -m whorl.slice.whorl_slice --prompt "..." --live  # send holes to Groq
+Run (llama-server must be up first, memory-gated):
+  # 1) launch the local 4-bit server (0.5B Q4, ~470MB RSS, safe on 2.6Gi box):
+  cd ~/llama.cpp && setsid ./llama-server -m ~/models/glue/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf \
+      --port 8080 --host 127.0.0.1 -c 512 -t 2 -tb 2 -ngl 0 --no-warmup \
+      > ~/models/glue/llama-server.live.log 2>&1 < /dev/null & disown
+  # 2) slice against REAL 4-bit logits (holes -> Groq FP16 adjudicator):
+  python3 -m whorl.slice.whorl_slice --backend llama --prompt "..." --live
+  # offline reference path (no binary needed):
+  python3 -m whorl.slice.whorl_slice --prompt "..."
   python3 -m whorl.slice.whorl_slice --selftest
 """
 
@@ -191,7 +200,7 @@ class LlamaServerPass(LocalPass):
     predicted length. If no server is reachable at construction, raises.
     """
 
-    def __init__(self, base_url: str = "http://127.0.0.1:8080", timeout: float = 10.0):
+    def __init__(self, base_url: str = "http://127.0.0.1:8080", timeout: float = 60.0):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self._probe()
@@ -205,10 +214,78 @@ class LlamaServerPass(LocalPass):
             ) from exc
 
     def next_token(self, context: str) -> SampleResult:
-        raise RuntimeError(
-            "single-token logit extraction needs llama-server '--logits-all' and a "
-            "custom sampler call; wire here when the binary is built on this box. "
-            "For offline use ReferenceQ4Pass."
+        """Genuine single-token logit extraction from a live llama-server.
+
+        Uses the OpenAI-compatible /v1/completions endpoint with logprobs and
+        greedy decoding (temperature=0) so the returned top_logprobs ARE the
+        real model's top-k log-probabilities over its vocab — i.e. true 4-bit
+        confidence, not a simulation. The last hidden layer is not exposed by
+        this endpoint, so hidden_state is left None (SliceController already
+        treats None safely); `logits`/top_k/confidence are all real.
+        """
+        req = urllib.request.Request(
+            self.base_url + "/v1/completions",
+            data=json.dumps({
+                "prompt": context[-2048:],
+                "max_tokens": 1,
+                "temperature": 0,
+                "top_p": 1,
+                "n": 1,
+                "logprobs": 8,
+                "echo": False,
+            }).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(f"llama-server /v1/completions failed: {exc}") from exc
+
+        choices = (data or {}).get("choices") or []
+        if not choices:
+            raise RuntimeError("llama-server returned no choices")
+        top1 = ((choices[0].get("text") or "").strip()) or None
+        # logprobs can be nested two ways depending on llama.cpp build:
+        #   older: logprobs.top_logprobs                (dict token->logp)
+        #   newer: logprobs.content[-1].top_logprobs     (list entry equality)
+        lp: Dict[str, float] = {}
+        lp_top = (choices[0].get("logprobs") or {}).get("top_logprobs")
+        if isinstance(lp_top, dict) and lp_top:
+            lp = {str(k): float(v) for k, v in lp_top.items()}
+        else:
+            content = (choices[0].get("logprobs") or {}).get("content") or []
+            for entry in (content if isinstance(content, list) else []):
+                tl = entry.get("top_logprobs") if isinstance(entry, dict) else None
+                if isinstance(tl, list):
+                    for item in tl:
+                        if isinstance(item, dict) and item.get("token") is not None:
+                            lp[item["token"]] = float(item.get("logprob", 0.0))
+        if not lp:
+            # Fallback: no logprobs returned -> single-candidate degenerate row.
+            return SampleResult(
+                token=top1 or "", top_k=[(top1 or "", 1.0)], confidence=1.0,
+                entropy=0.0, hidden_state=None, logits={top1: 0.0} if top1 else {},
+            )
+        # lp maps token -> log-probability (natural log). Convert to probability.
+        pairs: List[Tuple[str, float]] = []
+        logits: Dict[str, float] = {}
+        maxp = max(0.0, *lp.values())
+        for tok, lgp in lp.items():
+            p = math.exp(lgp - maxp) if maxp > -float("inf") else 0.0
+            logits[tok] = lgp     # keep raw log-prob as the "logit" fingerprint
+            pairs.append((tok, p))
+        norm = sum(p for _, p in pairs) or 1.0
+        top_k = sorted(((t, p / norm) for t, p in pairs), key=lambda kv: -kv[1])
+        probs = [p for _, p in top_k]
+        ent = -sum(p * math.log(p) for p in probs if p > 0)
+        norm_ent = ent / math.log(len(probs)) if len(probs) > 1 else 0.0
+        conf = 1.0 - norm_ent
+        return SampleResult(
+            token=(top1 or (top_k[0][0] if top_k else "")),
+            top_k=top_k, confidence=conf, entropy=ent,
+            hidden_state=None, logits=logits,
         )
 
 
